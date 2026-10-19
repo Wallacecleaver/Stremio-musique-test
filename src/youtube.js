@@ -44,11 +44,36 @@ export function getTrack(id) {
   });
 }
 
+// Clients InnerTube essayés dans l'ordre : YouTube refuse le client « web » sans jeton PO,
+// les autres fournissent souvent des liens audio directement.
+const AUDIO_CLIENTS = ['ANDROID_VR', 'TV', 'IOS', 'YTMUSIC_ANDROID', 'TV_SIMPLY', 'WEB_EMBEDDED', 'MWEB', 'ANDROID'];
+let lastGood;
+
+/** Essaie chaque candidat jusqu'à un succès ; si tout échoue, l'erreur liste chaque échec (visible dans les logs). */
+export async function firstWorking(candidates, attempt) {
+  const errors = [];
+  for (const c of candidates) {
+    try {
+      const out = await attempt(c);
+      if (out) return { value: out, candidate: c };
+      errors.push(`${c}: résultat vide`);
+    } catch (e) {
+      errors.push(`${c}: ${e.message}`);
+    }
+  }
+  throw new Error(`Aucun client YouTube n'a fourni d'audio -> ${errors.join(' | ')}`);
+}
+
 /** URL audio directe (liée à l'IP du serveur -> à relayer via /audio/:id). */
 export async function getAudioFormat(id) {
   const c = await yt();
-  const info = await c.getBasicInfo(id);
-  const format = info.chooseFormat({ type: 'audio', quality: 'best' });
-  const url = format.url ?? (await format.decipher(c.session.player));
-  return { url, mime: format.mime_type?.split(';')[0] ?? 'audio/mp4' };
+  const order = lastGood ? [lastGood, ...AUDIO_CLIENTS.filter((x) => x !== lastGood)] : AUDIO_CLIENTS;
+  const { value, candidate } = await firstWorking(order, async (client) => {
+    const info = await c.getBasicInfo(id, { client });
+    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+    const url = format.url || (await format.decipher(c.session.player));
+    return url ? { url, mime: format.mime_type?.split(';')[0] ?? 'audio/mp4' } : null;
+  });
+  lastGood = candidate;
+  return value;
 }
