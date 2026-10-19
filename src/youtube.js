@@ -18,18 +18,30 @@ export function cleanTrack(rawTitle = '', rawAuthor = '') {
   return { artist, title };
 }
 
-const toTrack = (i) => ({
+/** Agrandit les pochettes googleusercontent (=w226-h226 -> 600 px) pour un affichage net. */
+export function bigThumb(url) {
+  if (!url) return url;
+  return url.replace(/=w\d+-h\d+[^/?]*$/, '=w600-h600-l90-rj').replace(/=s\d+[^/?]*$/, '=s600');
+}
+
+export const toTrack = (i) => ({
   id: i.id,
   title: i.title,
   artist: i.artists?.map((a) => a.name).join(', ') || i.author?.name || '',
   album: i.album?.name,
   duration: i.duration?.seconds,
-  poster: i.thumbnails?.at(-1)?.url,
+  poster: bigThumb(i.thumbnails?.at(-1)?.url),
 });
+
+/** Éléments d'une recherche YT Music : l'étagère nommée si elle existe, sinon toutes les étagères (cas des recherches filtrées). */
+export const shelfItems = (res, key) => res[key]?.contents ?? res.contents?.flatMap((s) => s.contents ?? []) ?? [];
 
 export async function searchTracks(query) {
   const res = await (await yt()).music.search(query, { type: 'song' });
-  const tracks = (res.songs?.contents ?? []).filter((i) => i.id).slice(0, 25).map(toTrack);
+  const tracks = shelfItems(res, 'songs')
+    .filter((i) => i.id && (!i.item_type || i.item_type === 'song'))
+    .slice(0, 25)
+    .map(toTrack);
   await Promise.all(tracks.map((t) => put(`track:${t.id}`, t, 30 * 86400)));
   return tracks;
 }
@@ -55,7 +67,9 @@ export function isSameTrack(track, cand) {
 export function findClip(track) {
   return cached(`clip:${track.id}`, 30 * 86400, async () => {
     const res = await (await yt()).music.search(`${track.artist} ${track.title}`, { type: 'video' });
-    const hit = (res.videos?.contents ?? []).filter((i) => i.id).map(toTrack).find((c) => isSameTrack(track, c));
+    const cands = shelfItems(res, 'videos').filter((i) => i.id).map(toTrack);
+    const hit = cands.find((c) => isSameTrack(track, c));
+    if (!hit) console.warn(`[clip] aucun clip pour "${track.artist} - ${track.title}" (${cands.length} candidats : ${cands.slice(0, 3).map((c) => `${c.title}/${c.duration}s`).join(' ; ')})`);
     return hit?.id ?? null;
   });
 }

@@ -39,7 +39,7 @@ export function vttTime(sec) {
 }
 
 /** Lignes datées -> WebVTT. Une ligne reste affichée jusqu'à la suivante (max maxHold s). */
-export function toVtt(lines, duration, maxHold = 10) {
+export function toVtt(lines, duration, maxHold = 10, note = '') {
   const cues = [];
   for (let i = 0; i < lines.length; i++) {
     const { t, text } = lines[i];
@@ -49,5 +49,5 @@ export function toVtt(lines, duration, maxHold = 10) {
     if (end - t < 0.3) continue;
     cues.push(`${vttTime(t)} --> ${vttTime(end)}\n${text}`);
   }
-  return `WEBVTT\n\n${cues.join('\n\n')}\n`;
+  return `WEBVTT\n\n${note ? `NOTE ${note}\n\n` : ''}${cues.join('\n\n')}\n`;
 }

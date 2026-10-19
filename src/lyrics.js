@@ -52,7 +52,7 @@ export function getLyricsVtt(videoId, track) {
     for (const provider of [lrclib, genius]) {
       try {
         const r = await provider(track);
-        if (r?.lines.length) return toVtt(r.lines, track.duration);
+        if (r?.lines.length) return toVtt(r.lines, track.duration, 10, `source=${r.source} synced=${r.synced}`);
       } catch (e) {
         console.warn(`[lyrics] ${provider.name} a échoué pour ${videoId}:`, e.message);
       }

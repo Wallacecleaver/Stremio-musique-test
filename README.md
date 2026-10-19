@@ -1,50 +1,41 @@
 # Musique & Paroles — addon Stremio
 
-Recherche une musique sur YouTube Music, la lit dans Stremio et affiche les paroles
-**synchronisées** sous forme de sous-titres.
+Cherche une musique (YouTube Music), la lit avec son **clip** ou sa **version audio**, affiche les
+**paroles synchronisées** en sous-titres, et transforme tes **playlists Spotify** en catalogues.
+
+Ouvre `https://<ton-projet>.vercel.app/` : page d'installation, configuration, test d'un titre et état du service.
 
 ## Fonctionnement
 
-| Ressource | Rôle |
+| Élément | Rôle |
 |---|---|
-| `catalog` (search) | Recherche YouTube Music (`youtubei.js`, sans clé API) |
-| `meta` | Titre, artiste, pochette, durée |
-| `stream` | Clip YouTube (si trouvé) + version audio YouTube ; relais `/audio/:id` en option (`AUDIO_RELAY=on`) ; sous-titres attachés |
-| `subtitles` | Même piste de paroles, pour les clients qui passent par la ressource |
-| `/lyrics/:id.vtt` | LRCLIB (synchro) → LRCLIB (texte brut) → Genius, converti en WebVTT |
+| Catalogue « Musique » | Recherche YouTube Music (`youtubei.js`, sans clé API), pochettes en haute définition |
+| Une rangée par playlist | Playlist Spotify publique → titres associés à leur équivalent YouTube Music (pagination par 40) |
+| Flux | 🎬 Clip (si trouvé : titre, artiste et durée vérifiés) · 🎵 Version audio · 📡 Relais serveur (option) |
+| Paroles | LRCLIB (synchro) → LRCLIB (texte brut) → Genius, servies en WebVTT sur `/lyrics/:id.vtt` |
+| `/api/status` `/api/test` `/api/playlist` | Diagnostic, test d'un titre, lecture d'une playlist |
 
-Paroles **sans timestamp** (texte brut, Genius) : lignes réparties sur la durée au prorata
-de leur longueur. C'est approximatif ; seules les paroles LRCLIB sont réellement synchronisées.
+La configuration (type, playlists) est portée par l'URL : `https://host/<config>/manifest.json`.
+Aucune base de données ni compte : réinstalle l'addon après avoir modifié sa configuration.
+
+## Playlists Spotify
+
+Lecture via la page publique d'intégration de Spotify (métadonnées seulement : titre, artiste, durée).
+Pourquoi pas l'API officielle : depuis février 2026, le contenu d'une playlist n'est renvoyé que pour
+ses propriétaires/collaborateurs, et le mode développeur impose Premium et un plafond d'utilisateurs.
+Limites : playlists **publiques**, 100 premiers titres, et la méthode peut casser si Spotify change sa page.
 
 ## Lancer
 
 ```bash
 npm install
-cp .env.example .env   # optionnel
-npm start              # http://localhost:7000/manifest.json
+npm start      # http://localhost:7000/
 npm test
 ```
 
-## Déploiement Vercel
+## Déployer sur Vercel
 
-1. Importer le dépôt sur Vercel (aucun réglage de build : `api/index.js` + `vercel.json` suffisent).
-2. Variables d'environnement (toutes optionnelles) :
-   - `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (ou `KV_REST_API_URL` / `KV_REST_API_TOKEN` si Redis vient de l'intégration Vercel) : cache persistant des paroles.
-   - `GENIUS_TOKEN` : fallback paroles non synchronisées.
-   - `STREAM_MODE` : `proxy` (défaut) ou `ytid`.
-3. Installer `https://<ton-projet>.vercel.app/manifest.json` dans Stremio.
-
-L'URL publique est déduite de la requête (previews comprises) ; `BASE_URL` n'est utile que derrière un domaine custom exotique.
-Limite : une fonction Vercel a une durée maximale (`maxDuration`, 60 s ici) ; le relais audio peut donc être coupé sur un très long titre.
-
-## Flux proposés
-
-Stremio liste jusqu'à trois flux, à choisir dans l'écran du titre :
-
-1. **Clip** : clip YouTube correspondant (titre, artiste et durée vérifiés), s'il existe.
-2. **Audio** : la version « song » de YouTube Music (souvent juste la pochette).
-3. **Relais** : audio extrait et relayé par le serveur. Désactivé par défaut ; `AUDIO_RELAY=on`
-   sur un VPS uniquement, car YouTube refuse les IP de Vercel (« Streaming data not available »).
-
-Les flux 1 et 2 sont lus par Stremio directement depuis ton PC, donc ils ne dépendent pas de l'IP du serveur.
-Point à vérifier : les sous-titres (paroles) s'affichent-ils avec un flux YouTube ? Sinon, héberger sur un VPS avec le relais.
+Importer le dépôt (preset **Other**), puis variables facultatives :
+`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (ou `KV_REST_API_URL` / `KV_REST_API_TOKEN`) — cache persistant,
+**recommandé** (affichage plus rapide des fiches et playlists) ;
+`GENIUS_TOKEN` — paroles de secours ; `AUDIO_RELAY=on` — flux « Relais » (VPS uniquement, YouTube bloque les IP de Vercel).

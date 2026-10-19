@@ -1,6 +1,6 @@
 {
   "name": "stremio-musique-paroles",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Addon Stremio : recherche de musique YouTube + paroles synchronisées (LRCLIB, Genius en secours)",
