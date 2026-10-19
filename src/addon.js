@@ -1,5 +1,5 @@
 import sdk from 'stremio-addon-sdk';
-import { searchTracks, getTrack } from './youtube.js';
+import { searchTracks, getTrack, findClip } from './youtube.js';
 import { baseUrl } from './context.js';
 
 const { addonBuilder } = sdk;
@@ -52,13 +52,25 @@ builder.defineMetaHandler(async ({ id }) => {
   };
 });
 
+/**
+ * Flux proposés (l'utilisateur choisit dans Stremio) :
+ *  1. Clip vidéo YouTube, si on en trouve un  (lu depuis l'IP de l'utilisateur)
+ *  2. Version audio YouTube                   (idem)
+ *  3. Audio relayé par le serveur             (seulement si AUDIO_RELAY=on : inutile sur Vercel, YouTube bloque l'IP)
+ */
 builder.defineStreamHandler(async ({ id }) => {
   const vid = videoId(id);
-  const stream =
-    process.env.STREAM_MODE === 'ytid'
-      ? { ytId: vid, title: 'YouTube (lecteur intégré)' }
-      : { url: `${baseUrl()}/audio/${vid}`, title: 'Audio', behaviorHints: { notWebReady: false } };
-  return { streams: [{ ...stream, subtitles: [subtitleFor(vid)] }] };
+  const subtitles = [subtitleFor(vid)];
+  const streams = [];
+
+  const track = await getTrack(vid).catch(() => null);
+  const clip = track ? await findClip(track).catch(() => null) : null;
+  if (clip) streams.push({ ytId: clip, name: 'Clip', title: 'Clip vidéo (YouTube)', subtitles });
+  streams.push({ ytId: vid, name: 'Audio', title: 'Version audio (YouTube)', subtitles });
+  if (process.env.AUDIO_RELAY === 'on') {
+    streams.push({ url: `${baseUrl()}/audio/${vid}`, name: 'Relais', title: 'Audio relayé par le serveur', subtitles });
+  }
+  return { streams };
 });
 
 builder.defineSubtitlesHandler(async ({ id }) => ({ subtitles: [subtitleFor(videoId(id))] }));

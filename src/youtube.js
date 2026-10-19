@@ -34,6 +34,32 @@ export async function searchTracks(query) {
   return tracks;
 }
 
+const norm = (s = '') =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const VARIANT = /\b(live|cover|karaoke|remix|reaction|instrumental|slowed|reverb|sped|nightcore|8d)\b/;
+
+/** Le candidat est-il le même morceau (en clip) que `track` ? Titre, artiste et durée doivent concorder. */
+export function isSameTrack(track, cand) {
+  if (!cand?.id || cand.id === track.id) return false;
+  const t = norm(track.title);
+  const c = norm(cand.title);
+  if (!t || !(c.includes(t) || t.includes(c))) return false;
+  if (VARIANT.test(c) && !VARIANT.test(t)) return false;
+  const a = norm(track.artist).split(' ')[0];
+  if (a && !norm(`${cand.artist} ${cand.title}`).includes(a)) return false;
+  if (track.duration && cand.duration && Math.abs(track.duration - cand.duration) > Math.max(15, track.duration * 0.1)) return false;
+  return true;
+}
+
+/** videoId d'un clip officiel correspondant au titre, ou null (la version « song » est souvent juste une pochette). */
+export function findClip(track) {
+  return cached(`clip:${track.id}`, 30 * 86400, async () => {
+    const res = await (await yt()).music.search(`${track.artist} ${track.title}`, { type: 'video' });
+    const hit = (res.videos?.contents ?? []).filter((i) => i.id).map(toTrack).find((c) => isSameTrack(track, c));
+    return hit?.id ?? null;
+  });
+}
+
 /** Métadonnées propres d'un titre : cache de recherche, sinon infos de la vidéo. */
 export function getTrack(id) {
   return cached(`track:${id}`, 30 * 86400, async () => {
